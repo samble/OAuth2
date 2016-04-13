@@ -8,6 +8,8 @@ using OAuth2.Models;
 using RestSharp;
 using RestSharp.Authenticators;
 using RestSharp.Extensions.MonoHttp;
+using System.Web;
+using System.Collections;
 
 namespace OAuth2.Client
 {
@@ -22,6 +24,8 @@ namespace OAuth2.Client
         private const string TokenTypeKey = "token_type";
 
         private readonly IRequestFactory _factory;
+
+        private readonly IDictionary _persistor;
 
         /// <summary>
         /// Client configuration object.
@@ -38,10 +42,27 @@ namespace OAuth2.Client
         /// </summary>
         public string State { get; private set; }
 
+        private string _accessToken;
         /// <summary>
         /// Access token returned by provider. Can be used for further calls of provider API.
         /// </summary>
-        public string AccessToken { get; private set; }
+        public string AccessToken
+        {
+            get {
+                if (_accessToken == null && _persistor != null)
+                    _accessToken = _persistor[AccessTokenKey] as string;
+                return _accessToken;
+            }
+
+            private set
+            {
+                _accessToken = value;
+                if (_persistor != null)
+                {
+                    _persistor[AccessTokenKey] = value;
+                }
+            }
+        }
 
         /// <summary>
         /// Refresh token returned by provider. Can be used for further calls of provider API.
@@ -65,10 +86,13 @@ namespace OAuth2.Client
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        protected OAuth2Client(IRequestFactory factory, IClientConfiguration configuration)
+        protected OAuth2Client(IRequestFactory factory, IClientConfiguration configuration) : this(factory, configuration, null) { }
+ 
+        protected OAuth2Client(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor)
         {
             _factory = factory;
             Configuration = configuration;
+            _persistor = persistor;
         }
 
         /// <summary>
@@ -218,30 +242,30 @@ namespace OAuth2.Client
                 RefreshToken = ParseTokenResponse(response.Content, RefreshTokenKey);
 
             TokenType = ParseTokenResponse(response.Content, TokenTypeKey);
-            
+
             int expiresIn;
             if (Int32.TryParse(ParseTokenResponse(response.Content, ExpiresKey), out expiresIn))
                 ExpiresAt = DateTime.Now.AddSeconds(expiresIn);
         }
 
-		protected virtual string ParseTokenResponse(string content, string key)
-		{
-		    if (String.IsNullOrEmpty(content) || String.IsNullOrEmpty(key))
-		        return null;
+        protected virtual string ParseTokenResponse(string content, string key)
+        {
+            if (String.IsNullOrEmpty(content) || String.IsNullOrEmpty(key))
+                return null;
 
-			try
-			{
-				// response can be sent in JSON format
-				var token = JObject.Parse(content).SelectToken(key);
-				return token != null ? token.ToString() : null;
-			}
-			catch (JsonReaderException)
-			{
-				// or it can be in "query string" format (param1=val1&param2=val2)
-				var collection = HttpUtility.ParseQueryString(content);
-				return collection[key];
-			}
-		}
+            try
+            {
+                // response can be sent in JSON format
+                var token = JObject.Parse(content).SelectToken(key);
+                return token != null ? token.ToString() : null;
+            }
+            catch (JsonReaderException)
+            {
+                // or it can be in "query string" format (param1=val1&param2=val2)
+                var collection = RestSharp.Extensions.MonoHttp.HttpUtility.ParseQueryString(content);
+                return collection[key];
+            }
+        }
 
         /// <summary>
         /// Should return parsed <see cref="UserInfo"/> using content received from provider.
@@ -290,23 +314,35 @@ namespace OAuth2.Client
         {
         }
 
-        /// <summary>
-        /// Obtains user information using provider API.
-        /// </summary>
-        protected virtual UserInfo GetUserInfo()
+        protected virtual IRestResponse GetResponse(Endpoint endpoint, Action<BeforeAfterRequestArgs> beforeRequestHook = null)
         {
             var client = _factory.CreateClient(UserInfoServiceEndpoint);
             client.Authenticator = new OAuth2UriQueryParameterAuthenticator(AccessToken);
             var request = _factory.CreateRequest(UserInfoServiceEndpoint);
 
-            BeforeGetUserInfo(new BeforeAfterRequestArgs
+            if (beforeRequestHook != null)
             {
-                Client = client,
-                Request = request,
-                Configuration = Configuration
-            });
+                beforeRequestHook(new BeforeAfterRequestArgs
+                {
+                    Client = client,
+                    Request = request,
+                    Configuration = Configuration
+                });
+            }
 
-            var response = client.ExecuteAndVerify(request);
+            IRestResponse response = client.ExecuteAndVerify(request);
+
+            return response;
+        }
+
+        /// <summary>
+        /// Obtains user information using provider API.
+        /// </summary>
+        protected virtual UserInfo GetUserInfo()
+        {
+            Action<BeforeAfterRequestArgs> hook = (args) => BeforeGetUserInfo(args);
+
+            IRestResponse response = GetResponse(UserInfoServiceEndpoint, hook);
 
             var result = ParseUserInfo(response.Content);
             result.ProviderName = Name;

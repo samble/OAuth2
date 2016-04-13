@@ -4,6 +4,8 @@ using OAuth2.Configuration;
 using OAuth2.Infrastructure;
 using OAuth2.Models;
 using RestSharp.Authenticators;
+using System;
+using RestSharp;
 
 namespace OAuth2.Client.Impl
 {
@@ -17,7 +19,7 @@ namespace OAuth2.Client.Impl
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        public FitbitClient(IRequestFactory factory, IClientConfiguration configuration) 
+        public FitbitClient(IRequestFactory factory, IClientConfiguration configuration)
             : base(factory, configuration)
         {
         }
@@ -66,7 +68,19 @@ namespace OAuth2.Client.Impl
                 };
             }
         }
-        
+
+        /// <summary>
+        /// Defines URI of service which allows to obtain information about intra-day step data.
+        /// </summary>
+        protected Endpoint GetStepDataIntraDayServiceEndpoint(DateTime day)
+        {
+            return new Endpoint
+            {
+                BaseUri = "https://api.fitbit.com",
+                Resource = String.Format("/1/user/-/activities/steps/date/{0}/1d.json", day.ToString("yyyy-MM-dd"))
+            };
+        }
+
         protected override void BeforeGetAccessToken(BeforeAfterRequestArgs args)
         {
             args.Client.Authenticator = new HttpBasicAuthenticator(Configuration.ClientId, Configuration.ClientSecret);
@@ -100,6 +114,13 @@ namespace OAuth2.Client.Impl
                         Large = null
                     }
             };
+        }
+
+        public string GetIntraDayStepData(DateTime day)
+        {
+            Action<BeforeAfterRequestArgs> hook = (args) => BeforeGetUserInfo(args);
+            IRestResponse result = GetResponse(this.GetStepDataIntraDayServiceEndpoint(day), hook);
+            return result.Content;
         }
 
         /// <summary>
