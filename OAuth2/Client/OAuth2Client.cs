@@ -48,9 +48,10 @@ namespace OAuth2.Client
         /// </summary>
         public string AccessToken
         {
-            get {
+            get
+            {
                 if (_accessToken == null && _persistor != null)
-                    _accessToken = _persistor[AccessTokenKey] as string;
+                    _accessToken = _persistor[PersistorKey(AccessTokenKey)] as string;
                 return _accessToken;
             }
 
@@ -59,20 +60,54 @@ namespace OAuth2.Client
                 _accessToken = value;
                 if (_persistor != null)
                 {
-                    _persistor[AccessTokenKey] = value;
+                    _persistor[PersistorKey(AccessTokenKey)] = value;
                 }
             }
         }
 
+        private string _refreshToken;
         /// <summary>
         /// Refresh token returned by provider. Can be used for further calls of provider API.
         /// </summary>
-        public string RefreshToken { get; private set; }
+        public string RefreshToken
+        {
+            get
+            {
+                if (_refreshToken == null && _persistor != null)
+                    _refreshToken = _persistor[PersistorKey(RefreshTokenKey)] as string;
+                return _refreshToken;
+            }
+            private set
+            {
+                _refreshToken = value;
+                if (_persistor != null)
+                {
+                    _persistor[PersistorKey(RefreshTokenKey)] = value;
+                }
+            }
+        }
 
+        private string _tokenType;
         /// <summary>
         /// Token type returned by provider. Can be used for further calls of provider API.
         /// </summary>
-        public string TokenType { get; private set; }
+        public string TokenType
+        {
+            get
+            {
+                if (_tokenType == null && _persistor != null)
+                    _tokenType = _persistor[PersistorKey(TokenTypeKey)] as string;
+                return _tokenType;
+            }
+            private set
+            {
+                _tokenType = value;
+                if (_persistor != null)
+                {
+                    _persistor[PersistorKey(TokenTypeKey)] = value;
+                }
+            }
+        }
 
         /// <summary>
         /// Seconds till the token expires returned by provider. Can be used for further calls of provider API.
@@ -81,13 +116,14 @@ namespace OAuth2.Client
 
         private string GrantType { get; set; }
 
+        protected OAuth2Client(IRequestFactory factory, IClientConfiguration configuration) : this(factory, configuration, null) { }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="OAuth2Client"/> class.
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        protected OAuth2Client(IRequestFactory factory, IClientConfiguration configuration) : this(factory, configuration, null) { }
- 
+        /// <param name="persistor">Used to store key/values between requests (e.g. tokens).</param>
         protected OAuth2Client(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor)
         {
             _factory = factory;
@@ -316,9 +352,9 @@ namespace OAuth2.Client
 
         protected virtual IRestResponse GetResponse(Endpoint endpoint, Action<BeforeAfterRequestArgs> beforeRequestHook = null)
         {
-            var client = _factory.CreateClient(UserInfoServiceEndpoint);
+            var client = _factory.CreateClient(endpoint);
             client.Authenticator = new OAuth2UriQueryParameterAuthenticator(AccessToken);
-            var request = _factory.CreateRequest(UserInfoServiceEndpoint);
+            var request = _factory.CreateRequest(endpoint);
 
             if (beforeRequestHook != null)
             {
@@ -348,6 +384,11 @@ namespace OAuth2.Client
             result.ProviderName = Name;
 
             return result;
+        }
+
+        private string PersistorKey(string key)
+        {
+            return String.Format("{0}|+|{1}", Name, key);
         }
     }
 }

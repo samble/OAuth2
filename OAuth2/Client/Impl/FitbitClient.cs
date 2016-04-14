@@ -6,6 +6,7 @@ using OAuth2.Models;
 using RestSharp.Authenticators;
 using System;
 using RestSharp;
+using System.Collections;
 
 namespace OAuth2.Client.Impl
 {
@@ -14,13 +15,15 @@ namespace OAuth2.Client.Impl
     /// </summary>
     public class FitbitClient : OAuth2Client
     {
+
+        public FitbitClient(IRequestFactory factory, IClientConfiguration configuration) : this(factory, configuration, null) { }
         /// <summary>
         /// Initializes a new instance of the <see cref="FitbitClient"/> class.
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        public FitbitClient(IRequestFactory factory, IClientConfiguration configuration)
-            : base(factory, configuration)
+        public FitbitClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor)
+            : base(factory, configuration, persistor)
         {
         }
 
@@ -77,7 +80,7 @@ namespace OAuth2.Client.Impl
             return new Endpoint
             {
                 BaseUri = "https://api.fitbit.com",
-                Resource = String.Format("/1/user/-/activities/steps/date/{0}/1d.json", day.ToString("yyyy-MM-dd"))
+                Resource = String.Format("/1/user/-/activities/steps/date/{0}/1d/1min.json", day.ToString("yyyy-MM-dd"))
             };
         }
 
