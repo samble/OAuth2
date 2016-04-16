@@ -226,27 +226,18 @@ namespace OAuth2.Client
         /// <param name="parameters">Callback request payload (parameters).</param>
         public UserInfo GetUserInfo(NameValueCollection parameters)
         {
-            GrantType = "authorization_code";
-            CheckErrorAndSetState(parameters);
-            HandleLoginLinkUriRedirect(parameters);
+            FetchTokenFromLoginLinkUriRedirect(parameters);
             return GetUserInfo();
         }
 
-        /// TODO: Both GetToken functions are jacked, look back at unmodified
         /// <summary>
         /// Issues query for access token and returns access token.
         /// </summary>
         /// <param name="parameters">Callback request payload (parameters).</param>
+        [Obsolete("Please use HandleLoginLinkUriRedirect instead")]
         public string GetToken(NameValueCollection parameters)
         {
-            CheckErrorAndSetState(parameters);
-            return string.Empty;
-        }
-
-        public string GetToken()
-        {
-            GrantType = "authorization_code";
-            //QueryAccessToken(parameters);
+            FetchTokenFromLoginLinkUriRedirect(parameters);
             return AccessToken;
         }
 
@@ -254,8 +245,11 @@ namespace OAuth2.Client
         /// Handles redirect back from from GetLoginLinkUri()
         /// </summary>
         /// <param name="parameters">Callback request payload (parameters).</param>
-        private void HandleLoginLinkUriRedirect(NameValueCollection requestParameters)
+        /// <returns>The fetched AccessToken</returns>
+        public string FetchTokenFromLoginLinkUriRedirect(NameValueCollection requestParameters)
         {
+            CheckErrorAndSetState(requestParameters);
+
             var client = _factory.CreateClient(AccessTokenServiceEndpoint);
             var request = _factory.CreateRequest(AccessTokenServiceEndpoint, Method.POST);
 
@@ -278,7 +272,7 @@ namespace OAuth2.Client
 
             RefreshToken = ParseTokenResponse(content, RefreshTokenKey);
 
-            HandleTokenResponse(content);
+            return HandleTokenResponse(content);
         }
 
         /// <summary>
@@ -306,7 +300,7 @@ namespace OAuth2.Client
             HandleTokenResponse(response.Content);
         }
 
-        private void HandleTokenResponse(string responseContent)
+        private string HandleTokenResponse(string responseContent)
         {
             AccessToken = ParseTokenResponse(responseContent, AccessTokenKey);
 
@@ -324,6 +318,8 @@ namespace OAuth2.Client
             {
                 ExpiresAt = DateTime.Now.AddSeconds(DefaultExpiresInSeconds);
             }
+
+            return AccessToken;
         }
 
         /// <summary>
@@ -387,7 +383,7 @@ namespace OAuth2.Client
                 client_id = Configuration.ClientId,
                 client_secret = Configuration.ClientSecret,
                 redirect_uri = Configuration.RedirectUri,
-                grant_type = GrantType
+                grant_type = "authorization_code"
             });
         }
 
@@ -419,6 +415,14 @@ namespace OAuth2.Client
         {
         }
 
+        /// <summary>
+        /// Performs a validated request to an API endpoint with callback hooks.
+        /// Be sure to handle redirecting to GetLoginLinkUri() and before calling this.
+        /// </summary>
+        /// <param name="endpoint"></param>
+        /// <param name="beforeRequestHook"></param>
+        /// <param name="afterRequestHook"></param>
+        /// <returns></returns>
         protected virtual IRestResponse GetAPIResponse(Endpoint endpoint,
             Action<BeforeAfterRequestArgs> beforeRequestHook = null,
             Action<BeforeAfterRequestArgs> afterRequestHook = null)
@@ -429,7 +433,7 @@ namespace OAuth2.Client
             }
             else if (!IsCurrentAccessTokenValid && IsAccessTokenExpiredAndRefreshable)
             {
-
+                GetRefreshedAccessToken();
             }
 
             var client = _factory.CreateClient(endpoint);
