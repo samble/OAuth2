@@ -20,8 +20,17 @@ namespace OAuth2.Client
     {
         private const string AccessTokenKey = "access_token";
         private const string RefreshTokenKey = "refresh_token";
-        private const string ExpiresKey = "expires_in";
+        private const string ExpiresAtKey = "expires_in";
         private const string TokenTypeKey = "token_type";
+
+        private const int ExpiresBufferMilliseconds = 10000;
+        protected virtual int DefaultExpiresInSeconds
+        {
+            // https://tools.ietf.org/html/rfc6749#section-4.2.2
+            // Server doesn't have to return expires_in
+            // Default to one day
+            get { return 3600 * 24; }
+        }
 
         private readonly IRequestFactory _factory;
 
@@ -109,10 +118,27 @@ namespace OAuth2.Client
             }
         }
 
+        private DateTime? _expiresAt;
         /// <summary>
         /// Seconds till the token expires returned by provider. Can be used for further calls of provider API.
         /// </summary>
-        public DateTime ExpiresAt { get; private set; }
+        public DateTime ExpiresAt
+        {
+            get
+            {
+                if (!_expiresAt.HasValue && _persistor != null)
+                    _expiresAt = _persistor[ExpiresAtKey] as DateTime?;
+                return _expiresAt ?? DateTime.MaxValue;
+            }
+            private set
+            {
+                _expiresAt = value;
+                if (_persistor != null)
+                {
+                    _persistor[PersistorKey(ExpiresAtKey)] = value;
+                }
+            }
+        }
 
         private string GrantType { get; set; }
 
@@ -132,6 +158,40 @@ namespace OAuth2.Client
         }
 
         /// <summary>
+        /// True if you can make an API call, false if you need to redirect to GetLoginLinkUri() first
+        /// </summary>
+        /// <returns></returns>
+        public bool IsLoggedIn
+        {
+            get { return IsCurrentAccessTokenValid || IsAccessTokenExpiredAndRefreshable; }
+        }
+
+        /// <summary>
+        /// Returns true if AccessToken is present and unexpired
+        /// </summary>
+        private bool IsCurrentAccessTokenValid
+        {
+            get
+            {
+                return !String.IsNullOrEmpty(AccessToken) &&
+                  ExpiresAt > DateTime.Now.AddMilliseconds(ExpiresBufferMilliseconds);
+            }
+        }
+
+        /// <summary>
+        /// Returns true if AccessToken expiration is in the past, and we have a refresh token
+        /// </summary>
+        /// <returns></returns>
+        private bool IsAccessTokenExpiredAndRefreshable
+        {
+            get
+            {
+                return ExpiresAt < DateTime.Now.AddMilliseconds(ExpiresBufferMilliseconds)
+                  && !String.IsNullOrEmpty(RefreshToken);
+            }
+        }
+
+        /// <summary>
         /// Returns URI of service which should be called in order to start authentication process.
         /// This URI should be used for rendering login link.
         /// </summary>
@@ -142,27 +202,21 @@ namespace OAuth2.Client
         {
             var client = _factory.CreateClient(AccessCodeServiceEndpoint);
             var request = _factory.CreateRequest(AccessCodeServiceEndpoint);
-            if (String.IsNullOrEmpty(Configuration.Scope))
+
+
+            request.AddObject(new
             {
-                request.AddObject(new
-                {
-                    response_type = "code",
-                    client_id = Configuration.ClientId,
-                    redirect_uri = Configuration.RedirectUri,
-                    state
-                });
-            }
-            else
+                response_type = "code",
+                client_id = Configuration.ClientId,
+                redirect_uri = Configuration.RedirectUri,
+                state
+            });
+
+            if (!String.IsNullOrEmpty(Configuration.Scope))
             {
-                request.AddObject(new
-                {
-                    response_type = "code",
-                    client_id = Configuration.ClientId,
-                    redirect_uri = Configuration.RedirectUri,
-                    scope = Configuration.Scope,
-                    state
-                });
+                request.AddParameter("scope", Configuration.Scope);
             }
+
             return client.BuildUri(request).ToString();
         }
 
@@ -174,47 +228,102 @@ namespace OAuth2.Client
         {
             GrantType = "authorization_code";
             CheckErrorAndSetState(parameters);
-            QueryAccessToken(parameters);
+            HandleLoginLinkUriRedirect(parameters);
             return GetUserInfo();
         }
 
+        /// TODO: Both GetToken functions are jacked, look back at unmodified
         /// <summary>
         /// Issues query for access token and returns access token.
         /// </summary>
         /// <param name="parameters">Callback request payload (parameters).</param>
         public string GetToken(NameValueCollection parameters)
         {
-            GrantType = "authorization_code";
             CheckErrorAndSetState(parameters);
-            QueryAccessToken(parameters);
+            return string.Empty;
+        }
+
+        public string GetToken()
+        {
+            GrantType = "authorization_code";
+            //QueryAccessToken(parameters);
             return AccessToken;
         }
 
-        public string GetCurrentToken(string refreshToken = null, bool forceUpdate = false)
+        /// <summary>
+        /// Handles redirect back from from GetLoginLinkUri()
+        /// </summary>
+        /// <param name="parameters">Callback request payload (parameters).</param>
+        private void HandleLoginLinkUriRedirect(NameValueCollection requestParameters)
         {
-            if (!forceUpdate && ExpiresAt != default(DateTime) && DateTime.Now < ExpiresAt && !String.IsNullOrEmpty(AccessToken))
+            var client = _factory.CreateClient(AccessTokenServiceEndpoint);
+            var request = _factory.CreateRequest(AccessTokenServiceEndpoint, Method.POST);
+
+            BeforeGetAccessToken(new BeforeAfterRequestArgs
             {
-                return AccessToken;
+                Client = client,
+                Request = request,
+                Parameters = requestParameters,
+                Configuration = Configuration
+            });
+
+            var response = client.ExecuteAndVerify(request);
+
+            string content = response.Content;
+
+            AfterGetAccessToken(new BeforeAfterRequestArgs
+            {
+                Response = response
+            });
+
+            RefreshToken = ParseTokenResponse(content, RefreshTokenKey);
+
+            HandleTokenResponse(content);
+        }
+
+        /// <summary>
+        /// Refreshes current AccessToken (and ExpiresAt)
+        /// </summary>
+        private void GetRefreshedAccessToken()
+        {
+            var client = _factory.CreateClient(AccessTokenServiceEndpoint);
+            var request = _factory.CreateRequest(AccessTokenServiceEndpoint, Method.POST);
+
+            BeforeGetRefreshAccessToken(new BeforeAfterRequestArgs
+            {
+                Client = client,
+                Configuration = Configuration,
+                Request = request
+            });
+
+            var response = client.ExecuteAndVerify(request);
+
+            AfterGetAccessToken(new BeforeAfterRequestArgs
+            {
+                Response = response,
+            });
+
+            HandleTokenResponse(response.Content);
+        }
+
+        private void HandleTokenResponse(string responseContent)
+        {
+            AccessToken = ParseTokenResponse(responseContent, AccessTokenKey);
+
+            if (String.IsNullOrEmpty(AccessToken))
+                throw new UnexpectedResponseException(AccessTokenKey);
+
+            TokenType = ParseTokenResponse(responseContent, TokenTypeKey);
+
+            int expiresIn;
+            if (Int32.TryParse(ParseTokenResponse(responseContent, ExpiresAtKey), out expiresIn) && expiresIn > 0)
+            {
+                ExpiresAt = DateTime.Now.AddSeconds(expiresIn);
             }
             else
             {
-                NameValueCollection parameters = new NameValueCollection();
-                if (!String.IsNullOrEmpty(refreshToken))
-                {
-                    parameters.Add("refresh_token", refreshToken);
-                }
-                else if (!String.IsNullOrEmpty(RefreshToken))
-                {
-                    parameters.Add("refresh_token", RefreshToken);
-                }
-                if (parameters.Count > 0)
-                {
-                    GrantType = "refresh_token";
-                    QueryAccessToken(parameters);
-                    return AccessToken;
-                }
+                ExpiresAt = DateTime.Now.AddSeconds(DefaultExpiresInSeconds);
             }
-            throw new Exception("Token never fetched and refresh token not provided.");
         }
 
         /// <summary>
@@ -245,45 +354,6 @@ namespace OAuth2.Client
             State = parameters["state"];
         }
 
-        /// <summary>
-        /// Issues query for access token and parses response.
-        /// </summary>
-        /// <param name="parameters">Callback request payload (parameters).</param>
-        private void QueryAccessToken(NameValueCollection parameters)
-        {
-            var client = _factory.CreateClient(AccessTokenServiceEndpoint);
-            var request = _factory.CreateRequest(AccessTokenServiceEndpoint, Method.POST);
-
-            BeforeGetAccessToken(new BeforeAfterRequestArgs
-            {
-                Client = client,
-                Request = request,
-                Parameters = parameters,
-                Configuration = Configuration
-            });
-
-            var response = client.ExecuteAndVerify(request);
-
-            AfterGetAccessToken(new BeforeAfterRequestArgs
-            {
-                Response = response,
-                Parameters = parameters
-            });
-
-            AccessToken = ParseTokenResponse(response.Content, AccessTokenKey);
-            if (String.IsNullOrEmpty(AccessToken))
-                throw new UnexpectedResponseException(AccessTokenKey);
-
-            if (GrantType != "refresh_token")
-                RefreshToken = ParseTokenResponse(response.Content, RefreshTokenKey);
-
-            TokenType = ParseTokenResponse(response.Content, TokenTypeKey);
-
-            int expiresIn;
-            if (Int32.TryParse(ParseTokenResponse(response.Content, ExpiresKey), out expiresIn))
-                ExpiresAt = DateTime.Now.AddSeconds(expiresIn);
-        }
-
         protected virtual string ParseTokenResponse(string content, string key)
         {
             if (String.IsNullOrEmpty(content) || String.IsNullOrEmpty(key))
@@ -311,32 +381,31 @@ namespace OAuth2.Client
 
         protected virtual void BeforeGetAccessToken(BeforeAfterRequestArgs args)
         {
-            if (GrantType == "refresh_token")
+            args.Request.AddObject(new
             {
-                args.Request.AddObject(new
-                {
-                    refresh_token = args.Parameters.GetOrThrowUnexpectedResponse("refresh_token"),
-                    client_id = Configuration.ClientId,
-                    client_secret = Configuration.ClientSecret,
-                    grant_type = GrantType
-                });
-            }
-            else
+                code = args.Parameters.GetOrThrowUnexpectedResponse("code"),
+                client_id = Configuration.ClientId,
+                client_secret = Configuration.ClientSecret,
+                redirect_uri = Configuration.RedirectUri,
+                grant_type = GrantType
+            });
+        }
+
+        protected virtual void BeforeGetRefreshAccessToken(BeforeAfterRequestArgs args)
+        {
+            args.Request.AddObject(new
             {
-                args.Request.AddObject(new
-                {
-                    code = args.Parameters.GetOrThrowUnexpectedResponse("code"),
-                    client_id = Configuration.ClientId,
-                    client_secret = Configuration.ClientSecret,
-                    redirect_uri = Configuration.RedirectUri,
-                    grant_type = GrantType
-                });
-            }
+                refresh_token = args.Parameters.GetOrThrowUnexpectedResponse(RefreshTokenKey),
+                client_id = Configuration.ClientId,
+                client_secret = Configuration.ClientSecret,
+                grant_type = RefreshTokenKey
+            });
         }
 
         /// <summary>
         /// Called just after obtaining response with access token from service.
         /// Allows to read extra data returned along with access token.
+        /// Also called after refreshing token (no separate callback)
         /// </summary>
         protected virtual void AfterGetAccessToken(BeforeAfterRequestArgs args)
         {
@@ -350,8 +419,19 @@ namespace OAuth2.Client
         {
         }
 
-        protected virtual IRestResponse GetResponse(Endpoint endpoint, Action<BeforeAfterRequestArgs> beforeRequestHook = null)
+        protected virtual IRestResponse GetAPIResponse(Endpoint endpoint,
+            Action<BeforeAfterRequestArgs> beforeRequestHook = null,
+            Action<BeforeAfterRequestArgs> afterRequestHook = null)
         {
+            if (!IsLoggedIn)
+            {
+                throw new InvalidOperationException("Must handle login flow before making API calls");
+            }
+            else if (!IsCurrentAccessTokenValid && IsAccessTokenExpiredAndRefreshable)
+            {
+
+            }
+
             var client = _factory.CreateClient(endpoint);
             client.Authenticator = new OAuth2UriQueryParameterAuthenticator(AccessToken);
             var request = _factory.CreateRequest(endpoint);
@@ -368,6 +448,13 @@ namespace OAuth2.Client
 
             IRestResponse response = client.ExecuteAndVerify(request);
 
+            if (afterRequestHook != null)
+            {
+                afterRequestHook(new BeforeAfterRequestArgs
+                {
+                    Response = response
+                });
+            }
             return response;
         }
 
@@ -378,7 +465,7 @@ namespace OAuth2.Client
         {
             Action<BeforeAfterRequestArgs> hook = (args) => BeforeGetUserInfo(args);
 
-            IRestResponse response = GetResponse(UserInfoServiceEndpoint, hook);
+            IRestResponse response = GetAPIResponse(UserInfoServiceEndpoint, hook);
 
             var result = ParseUserInfo(response.Content);
             result.ProviderName = Name;

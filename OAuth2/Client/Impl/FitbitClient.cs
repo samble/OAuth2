@@ -75,12 +75,16 @@ namespace OAuth2.Client.Impl
         /// <summary>
         /// Defines URI of service which allows to obtain information about intra-day step data.
         /// </summary>
-        protected Endpoint GetStepDataIntraDayServiceEndpoint(DateTime day)
+        protected Endpoint GetStepDataIntraDayServiceEndpoint(DateTime startDate, DateTime? endDate = null)
         {
+            endDate = endDate ?? startDate;
+
             return new Endpoint
             {
                 BaseUri = "https://api.fitbit.com",
-                Resource = String.Format("/1/user/-/activities/steps/date/{0}/1d/1min.json", day.ToString("yyyy-MM-dd"))
+                Resource = String.Format("/1/user/-/activities/steps/date/{0}/{1}/1min.json",
+                                        startDate.ToString("yyyy-MM-dd"),
+                                        endDate.Value.ToString("yyyy-MM-dd"))
             };
         }
 
@@ -122,7 +126,7 @@ namespace OAuth2.Client.Impl
         public string GetIntraDayStepData(DateTime day)
         {
             Action<BeforeAfterRequestArgs> hook = (args) => BeforeGetUserInfo(args);
-            IRestResponse result = GetResponse(this.GetStepDataIntraDayServiceEndpoint(day), hook);
+            IRestResponse result = GetAPIResponse(this.GetStepDataIntraDayServiceEndpoint(day), hook);
             return result.Content;
         }
 
