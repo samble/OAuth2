@@ -8,6 +8,7 @@ using OAuth2.Infrastructure;
 using OAuth2.Models;
 using RestSharp;
 using RestSharp.Authenticators;
+using System.Collections;
 
 namespace OAuth2.Client.Impl
 {
@@ -18,8 +19,14 @@ namespace OAuth2.Client.Impl
     {
         private readonly IRequestFactory _factory;
 
-        public GitHubClient(IRequestFactory factory, IClientConfiguration configuration)
-            : base(factory, configuration)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GitHubClient"/> class.
+        /// </summary>
+        /// <param name="factory">The factory.</param>
+        /// <param name="configuration">The configuration.</param>
+        /// <param name="persistor">Object to store token info between instantiations (e.g. web requests - <see cref="SessionPersistor"/>)</param>
+        public GitHubClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor = null)
+            : base(factory, configuration, persistor)
         {
             _factory = factory;
         }
@@ -43,28 +50,28 @@ namespace OAuth2.Client.Impl
         protected override UserInfo ParseUserInfo(string content)
         {
             var cnt = JObject.Parse(content);
-            var names = (cnt["name"].SafeGet(x => x.Value<string>()) ?? string.Empty).Split(new []{ " " }, StringSplitOptions.RemoveEmptyEntries).ToList();
+            var names = (cnt["name"].SafeGet(x => x.Value<string>()) ?? string.Empty).Split(new[] { " " }, StringSplitOptions.RemoveEmptyEntries).ToList();
             const string avatarUriTemplate = "{0}&s={1}";
             var avatarUri = cnt["avatar_url"].Value<string>();
             var result = new UserInfo
-                {
-                    Email = cnt["email"].SafeGet(x => x.Value<string>()),
-                    ProviderName = this.Name,
-                    Id = cnt["id"].Value<string>(),
-                    FirstName = names.Count > 0 ? names.First() : cnt["login"].Value<string>(),
-                    LastName = names.Count > 1 ? names.Last() : string.Empty,
-                    AvatarUri =
+            {
+                Email = cnt["email"].SafeGet(x => x.Value<string>()),
+                ProviderName = this.Name,
+                Id = cnt["id"].Value<string>(),
+                FirstName = names.Count > 0 ? names.First() : cnt["login"].Value<string>(),
+                LastName = names.Count > 1 ? names.Last() : string.Empty,
+                AvatarUri =
                         {
                             Small = !string.IsNullOrWhiteSpace(avatarUri) ? string.Format(avatarUriTemplate, avatarUri, AvatarInfo.SmallSize) : string.Empty,
                             Normal = avatarUri,
                             Large = !string.IsNullOrWhiteSpace(avatarUri) ? string.Format(avatarUriTemplate, avatarUri, AvatarInfo.LargeSize) : string.Empty
                         }
-                };
+            };
 
             return result;
         }
 
-        protected override UserInfo GetUserInfo() 
+        protected override UserInfo GetUserInfo()
         {
             var userInfo = base.GetUserInfo();
             if (userInfo == null)
@@ -77,7 +84,8 @@ namespace OAuth2.Client.Impl
             client.Authenticator = new OAuth2UriQueryParameterAuthenticator(AccessToken);
             var request = _factory.CreateRequest(UserEmailServiceEndpoint);
 
-            BeforeGetUserInfo(new BeforeAfterRequestArgs {
+            BeforeGetUserInfo(new BeforeAfterRequestArgs
+            {
                 Client = client,
                 Request = request,
                 Configuration = Configuration
@@ -85,12 +93,12 @@ namespace OAuth2.Client.Impl
 
             var response = client.ExecuteAndVerify(request);
             var userEmails = ParseEmailAddresses(response.Content).Where(u => !String.IsNullOrEmpty(u.Email)).ToList();
-            
+
             string primaryEmail = userEmails.Where(u => u.Primary).Select(u => u.Email).FirstOrDefault();
             string verifiedEmail = userEmails.Where(u => u.Verified).Select(u => u.Email).FirstOrDefault();
             string fallbackEmail = userEmails.Select(u => u.Email).FirstOrDefault();
             userInfo.Email = primaryEmail ?? verifiedEmail ?? fallbackEmail;
-            
+
             return userInfo;
         }
 

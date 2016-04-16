@@ -6,6 +6,7 @@ using OAuth2.Infrastructure;
 using OAuth2.Models;
 using RestSharp;
 using RestSharp.Authenticators;
+using System.Collections;
 
 namespace OAuth2.Client.Impl
 {
@@ -19,8 +20,9 @@ namespace OAuth2.Client.Impl
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        public AsanaClient(IRequestFactory factory, IClientConfiguration configuration)
-            : base(factory, configuration)
+        /// <param name="persistor">Object to store token info between instantiations (e.g. web requests - <see cref="SessionPersistor"/>)</param>
+        public AsanaClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor = null)
+            : base(factory, configuration, persistor)
         {
         }
 

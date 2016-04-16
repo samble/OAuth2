@@ -93,6 +93,7 @@
     <Compile Include="Infrastructure\RequestFactoryExtensions.cs" />
     <Compile Include="Infrastructure\RestClientExtensions.cs" />
     <Compile Include="Infrastructure\SafeExtensions.cs" />
+    <Compile Include="Infrastructure\SessionPersistor.cs" />
     <Compile Include="Infrastructure\StringExtensions.cs" />
     <Compile Include="Infrastructure\UriUtility.cs" />
     <Compile Include="Models\UserInfo.cs" />

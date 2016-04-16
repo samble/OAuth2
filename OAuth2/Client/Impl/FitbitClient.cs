@@ -15,14 +15,13 @@ namespace OAuth2.Client.Impl
     /// </summary>
     public class FitbitClient : OAuth2Client
     {
-
-        public FitbitClient(IRequestFactory factory, IClientConfiguration configuration) : this(factory, configuration, null) { }
         /// <summary>
         /// Initializes a new instance of the <see cref="FitbitClient"/> class.
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        public FitbitClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor)
+        /// <param name="persistor">Object to store token info between instantiations (e.g. web requests - <see cref="SessionPersistor"/>)</param>
+        public FitbitClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor = null)
             : base(factory, configuration, persistor)
         {
         }

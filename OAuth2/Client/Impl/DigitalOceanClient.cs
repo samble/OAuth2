@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using OAuth2.Configuration;
 using OAuth2.Infrastructure;
 using OAuth2.Models;
+using System.Collections;
 
 namespace OAuth2.Client.Impl
 {
@@ -10,8 +11,14 @@ namespace OAuth2.Client.Impl
     {
         private string _accessToken;
 
-        public DigitalOceanClient(IRequestFactory factory, IClientConfiguration configuration) 
-            : base(factory, configuration)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DigitalOceanClient"/> class.
+        /// </summary>
+        /// <param name="factory">The factory.</param>
+        /// <param name="configuration">The configuration.</param>
+        /// <param name="persistor">Object to store token info between instantiations (e.g. web requests - <see cref="SessionPersistor"/>)</param>
+        public DigitalOceanClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor = null)
+            : base(factory, configuration, persistor)
         {
         }
 

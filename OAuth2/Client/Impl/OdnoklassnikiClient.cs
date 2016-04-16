@@ -4,6 +4,7 @@ using OAuth2.Configuration;
 using OAuth2.Infrastructure;
 using OAuth2.Models;
 using RestSharp;
+using System.Collections;
 
 namespace OAuth2.Client.Impl
 {
@@ -19,8 +20,9 @@ namespace OAuth2.Client.Impl
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        public OdnoklassnikiClient(IRequestFactory factory, IClientConfiguration configuration)
-            : base(factory, configuration)
+        /// <param name="persistor">Object to store token info between instantiations (e.g. web requests - <see cref="SessionPersistor"/>)</param>
+        public OdnoklassnikiClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor = null)
+            : base(factory, configuration, persistor)
         {
             _configuration = configuration;
         }
@@ -69,7 +71,7 @@ namespace OAuth2.Client.Impl
                 };
             }
         }
-        
+
         /// <summary>
         /// Called just before issuing request to third-party service when everything is ready.
         /// Allows to add extra parameters to request or do any other needed preparations.
@@ -114,13 +116,13 @@ namespace OAuth2.Client.Impl
             {
                 Id = response["uid"].Value<string>(),
                 FirstName = response["first_name"].Value<string>(),
-                LastName = response["last_name"].Value<string>(),                
+                LastName = response["last_name"].Value<string>(),
                 AvatarUri =
                     {
                         Small = null,
                         Normal = avatarUri,
                         Large = avatarUri.Replace("&photoType=4", "&photoType=6")
-                    }                
+                    }
             };
         }
         /// <summary>

@@ -25,11 +25,10 @@ namespace OAuth2
         /// you are still able to just create instance of manager manually and then use it in your project.
         /// </remarks>
         public AuthorizationRoot() :
-            this(new ConfigurationManager(), "oauth2", new RequestFactory(), null)
-        {
-        }
+            this(new ConfigurationManager(), "oauth2", new RequestFactory(), null) { }
 
-        public AuthorizationRoot(IDictionary persistor) : this(new ConfigurationManager(), "oauth2", new RequestFactory(), persistor) { }
+        public AuthorizationRoot(IDictionary persistor)
+            : this(new ConfigurationManager(), "oauth2", new RequestFactory(), persistor) { }
 
         public AuthorizationRoot(
             IConfigurationManager configurationManager,

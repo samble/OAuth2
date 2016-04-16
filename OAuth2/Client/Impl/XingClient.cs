@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using OAuth2.Configuration;
 using OAuth2.Infrastructure;
 using OAuth2.Models;
+using System.Collections;
 
 namespace OAuth2.Client.Impl
 {
@@ -18,7 +19,7 @@ namespace OAuth2.Client.Impl
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        public XingClient(IRequestFactory factory, IClientConfiguration configuration)
+        public XingClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor = null)
             : base(factory, configuration)
         {
         }

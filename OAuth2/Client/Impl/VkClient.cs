@@ -2,6 +2,7 @@ using Newtonsoft.Json.Linq;
 using OAuth2.Configuration;
 using OAuth2.Infrastructure;
 using OAuth2.Models;
+using System.Collections;
 
 namespace OAuth2.Client.Impl
 {
@@ -11,18 +12,19 @@ namespace OAuth2.Client.Impl
     public class VkClient : OAuth2Client
     {
         private string _userId;
-	private string _email;
+        private string _email;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="VkClient"/> class.
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        public VkClient(IRequestFactory factory, IClientConfiguration configuration)
-            : base(factory, configuration)
+        /// <param name="persistor">Object to store token info between instantiations (e.g. web requests - <see cref="SessionPersistor"/>)</param>
+        public VkClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor = null)
+            : base(factory, configuration, persistor)
         {
         }
-        
+
         /// <summary>
         /// Defines URI of service which issues access code.
         /// </summary>
@@ -81,9 +83,9 @@ namespace OAuth2.Client.Impl
         {
             var instance = JObject.Parse(args.Response.Content);
             _userId = instance["user_id"].Value<string>();
-	    var email = instance["email"];
-	    if (email != null)
-	        _email = email.Value<string>();
+            var email = instance["email"];
+            if (email != null)
+                _email = email.Value<string>();
         }
 
         /// <summary>
@@ -115,7 +117,7 @@ namespace OAuth2.Client.Impl
                         Small = null,
                         Normal = avatarUri,
                         Large = null
-                    }                
+                    }
             };
         }
     }

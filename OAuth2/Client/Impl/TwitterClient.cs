@@ -2,6 +2,7 @@ using Newtonsoft.Json.Linq;
 using OAuth2.Configuration;
 using OAuth2.Infrastructure;
 using OAuth2.Models;
+using System.Collections;
 
 namespace OAuth2.Client.Impl
 {
@@ -10,7 +11,7 @@ namespace OAuth2.Client.Impl
     /// </summary>
     public class TwitterClient : OAuthClient
     {
-        public TwitterClient(IRequestFactory factory, IClientConfiguration configuration)
+        public TwitterClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor = null)
             : base(factory, configuration)
         {
         }

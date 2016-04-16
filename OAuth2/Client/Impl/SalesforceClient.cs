@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using OAuth2.Configuration;
 using OAuth2.Infrastructure;
 using OAuth2.Models;
+using System.Collections;
 
 namespace OAuth2.Client.Impl
 {
@@ -16,8 +17,9 @@ namespace OAuth2.Client.Impl
         /// </summary>
         /// <param name="factory">The factory.</param>
         /// <param name="configuration">The configuration.</param>
-        public SalesforceClient(IRequestFactory factory, IClientConfiguration configuration)
-            : base(factory, configuration)
+        /// <param name="persistor">Object to store token info between instantiations (e.g. web requests - <see cref="SessionPersistor"/>)</param>
+        public SalesforceClient(IRequestFactory factory, IClientConfiguration configuration, IDictionary persistor = null)
+            : base(factory, configuration, persistor)
         {
         }
 
@@ -81,7 +83,7 @@ namespace OAuth2.Client.Impl
         {
             // save the user's identity service url which is included in the response
             SalesforceProfileUrl = base.ParseTokenResponse(content, "id");
-                
+
             return base.ParseTokenResponse(content, key);
         }
 
