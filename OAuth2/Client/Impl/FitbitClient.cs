@@ -122,10 +122,10 @@ namespace OAuth2.Client.Impl
             };
         }
 
-        public string GetIntraDayStepData(DateTime day)
+        public string GetStepData(DateTime startDate, DateTime? endDate = null)
         {
             Action<BeforeAfterRequestArgs> hook = (args) => BeforeGetUserInfo(args);
-            IRestResponse result = GetAPIResponse(this.GetStepDataIntraDayServiceEndpoint(day), hook);
+            IRestResponse result = GetAPIResponse(this.GetStepDataIntraDayServiceEndpoint(startDate, endDate), hook);
             return result.Content;
         }
 

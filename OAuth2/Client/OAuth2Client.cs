@@ -231,10 +231,25 @@ namespace OAuth2.Client
         }
 
         /// <summary>
+        /// Obtains user information using provider API.
+        /// </summary>
+        public virtual UserInfo GetUserInfo()
+        {
+            Action<BeforeAfterRequestArgs> hook = (args) => BeforeGetUserInfo(args);
+
+            IRestResponse response = GetAPIResponse(UserInfoServiceEndpoint, hook);
+
+            var result = ParseUserInfo(response.Content);
+            result.ProviderName = Name;
+
+            return result;
+        }
+
+        /// <summary>
         /// Issues query for access token and returns access token.
         /// </summary>
         /// <param name="parameters">Callback request payload (parameters).</param>
-        [Obsolete("Please use HandleLoginLinkUriRedirect instead")]
+        [Obsolete("Please use FetchTokenFromLoginLinkUriRedirect instead")]
         public string GetToken(NameValueCollection parameters)
         {
             FetchTokenFromLoginLinkUriRedirect(parameters);
@@ -460,21 +475,6 @@ namespace OAuth2.Client
                 });
             }
             return response;
-        }
-
-        /// <summary>
-        /// Obtains user information using provider API.
-        /// </summary>
-        protected virtual UserInfo GetUserInfo()
-        {
-            Action<BeforeAfterRequestArgs> hook = (args) => BeforeGetUserInfo(args);
-
-            IRestResponse response = GetAPIResponse(UserInfoServiceEndpoint, hook);
-
-            var result = ParseUserInfo(response.Content);
-            result.ProviderName = Name;
-
-            return result;
         }
 
         private string PersistorKey(string key)

@@ -64,7 +64,7 @@ namespace OAuth2.Client.Impl
             }
         }
 
-        protected override UserInfo GetUserInfo()
+        public override UserInfo GetUserInfo()
         {
             return ParseUserInfo(_accessToken);
         }

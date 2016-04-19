@@ -71,7 +71,7 @@ namespace OAuth2.Client.Impl
             return result;
         }
 
-        protected override UserInfo GetUserInfo()
+        public override UserInfo GetUserInfo()
         {
             var userInfo = base.GetUserInfo();
             if (userInfo == null)
